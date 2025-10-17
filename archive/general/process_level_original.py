@@ -1,5 +1,5 @@
 """
-General utility script for processing coding contest levels.
+Optimized CCC Level Processor - Extract, organize and prepare level files.
 
 Usage:
     python general/process_level.py <level_number>
@@ -12,24 +12,17 @@ This script will:
 2. Extract text from Level {LevelNumber}.pdf and create AI prompt
 3. Move .in files to Inputs/ folder
 4. Move example .out files to Outputs/ folder
-5. Run level{LevelNumber}.py to generate output files
-6. Move generated .out files to Outputs/ folder
-7. Clean up: delete all .in and .out files from infos/
+5. Optionally run level{LevelNumber}.py to generate output files
+6. Clean up: delete all files from infos/
 """
 
-import os
 import sys
-import zipfile
-import shutil
+import os
 from pathlib import Path
 
-try:
-    import pdfplumber
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
-    print("Warning: pdfplumber not installed. Install with: pip install pdfplumber")
-    print("PDF extraction will be skipped.")
+# Add parent directory to path to import ccc_core
+sys.path.append(str(Path(__file__).parent.parent))
+from ccc_core import CCCCore, validate_level_number, check_python_dependencies
 
 
 def extract_zip(level_number, zip_path=None):
