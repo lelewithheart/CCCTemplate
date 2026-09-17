@@ -185,6 +185,10 @@ if __name__ == "__main__":
     main()
 ```
 
+Überlegter Lüsungsweg:
+
+(Hier Lösungsweg einfügen)
+
 Bitte erstelle eine vollständige Lösung und speichere sie als level{self.level}.py
 """
         
@@ -484,8 +488,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Beispiele:
-  python ccc_simple.py 5           # Interaktiv mit AI-Hilfe
-  python ccc_simple.py 5 --auto    # Vollautomatisch
+  python ccc_simple.py 5           # Level 5 Zip wird verarbeitet
   python ccc_simple.py 5 --template # Nur Template erstellen
         """
     )

@@ -54,7 +54,6 @@ def setup():
     print("\n🎉 Setup abgeschlossen!")
     print("\n📖 Verwendung:")
     print("  python ccc_simple.py 5           # Interaktiv")
-    print("  python ccc_simple.py 5 --auto    # Automatisch")
     print("  python ccc_simple.py 5 --template # Template")
     
     return True
