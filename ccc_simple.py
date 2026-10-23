@@ -39,12 +39,37 @@ class CCCSimple:
     
     def __init__(self, level: int):
         self.level = level
+        self.level_dir = Path("levels") / f"level-{level}"
+        self.source_dir = self.level_dir / "source"
+        self.input_dir = self.level_dir / "Inputs"
+        self.output_dir = self.level_dir / "Outputs"
         self.setup_dirs()
     
     def setup_dirs(self):
         """Erstelle benötigte Ordner."""
-        for folder in ['Inputs', 'Outputs', 'infos']:
-            Path(folder).mkdir(exist_ok=True)
+        for folder in [self.source_dir, self.input_dir, self.output_dir]:
+            folder.mkdir(parents=True, exist_ok=True)
+
+    def prepare_run(self):
+        """Entferne alte Laufdaten dieses Levels vor einem neuen Lauf."""
+        if self.source_dir.exists():
+            shutil.rmtree(self.source_dir)
+
+        for folder in [self.input_dir, self.output_dir]:
+            if folder.exists():
+                shutil.rmtree(folder)
+
+        for filename in [
+            f"level{self.level}_prompt.txt",
+            f"level{self.level}_workflow.md",
+            f"level{self.level}_ai_request.md",
+        ]:
+            file_path = self.level_dir / filename
+            if file_path.exists():
+                file_path.unlink()
+
+        self.setup_dirs()
+        self.log(f"Alte Laufdaten gelöscht: {self.level_dir}", "OK")
     
     def log(self, msg: str, typ: str = "INFO"):
         """Einfaches Logging mit Icons."""
@@ -57,7 +82,7 @@ class CCCSimple:
     
     def find_zip(self) -> Path:
         """Finde ZIP-Datei."""
-        zip_name = f"level{self.level}.zip"
+        zip_name = f"level-{self.level}.zip"
         
         # Downloads-Ordner prüfen
         downloads = Path.home() / "Downloads" / zip_name
@@ -79,7 +104,7 @@ class CCCSimple:
         self.log("Extrahiere ZIP...")
         
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall("infos")
+            zip_ref.extractall(self.source_dir)
         
         self.log("ZIP extrahiert", "OK")
     
@@ -88,7 +113,8 @@ class CCCSimple:
         patterns = [
             f"Level {self.level}.pdf",
             f"level{self.level}.pdf", 
-            f"Level{self.level}.pdf"
+            f"Level{self.level}.pdf",
+            f"level-{self.level}.pdf"
         ]
         
         # Downloads prüfen
@@ -99,12 +125,12 @@ class CCCSimple:
         
         # infos Ordner prüfen
         for pattern in patterns:
-            pdf_path = Path("infos") / pattern
+            pdf_path = self.source_dir / pattern
             if pdf_path.exists():
                 return pdf_path
         
         # Irgendein PDF in infos
-        pdfs = list(Path("infos").glob("*.pdf"))
+        pdfs = list(self.source_dir.glob("*.pdf"))
         if pdfs:
             return pdfs[0]
             
@@ -112,12 +138,23 @@ class CCCSimple:
     
     def extract_pdf_text(self) -> str:
         """PDF-Text extrahieren."""
+        try:
+            pdf_path = self.find_pdf()
+        except FileNotFoundError as e:
+            self.log(str(e), "WARN")
+            return ""
+
+        self.log(f"PDF gefunden: {pdf_path}", "OK")
+
         if not PDF_OK:
-            self.log("pdfplumber nicht installiert - PDF wird übersprungen", "WARN")
+            self.log(
+                "pdfplumber nicht installiert - PDF-Text kann nicht extrahiert werden. "
+                "Installiere es mit: python3 -m pip install pdfplumber",
+                "WARN",
+            )
             return ""
         
         try:
-            pdf_path = self.find_pdf()
             self.log(f"Extrahiere Text aus: {pdf_path.name}")
             
             text = ""
@@ -136,24 +173,40 @@ class CCCSimple:
     
     def create_ai_prompt(self, pdf_text: str) -> str:
         """AI-Prompt erstellen."""
+        level_path = self.level_dir.resolve()
         prompt = f"""# Coding Challenge - Level {self.level}
 
+    ## Verbindliche Dateipfade
+    Arbeitsordner dieses Levels: `{level_path}`
+    Eingabedateien: `{level_path / "Inputs"}`
+    Ausgabedateien: `{level_path / "Outputs"}`
+    Lösungsdatei: `{level_path / f"level{self.level}.py"}`
+
+    WICHTIG:
+    - Verwende ausschließlich diese Pfade für dieses Level.
+    - Die Lösung muss die Verzeichnisse relativ zu ihrer eigenen Datei bestimmen.
+    - Verwende dafür `Path(__file__).resolve().parent`, nicht den aktuellen Terminalordner.
+    - Suche Eingaben mit `BASE_DIR / "Inputs" / "in_*"`.
+    - Schreibe Ausgaben mit `BASE_DIR / "Outputs"`.
+    - Speichere die Lösung exakt unter `{level_path / f"level{self.level}.py"}`.
+
 ## Problembeschreibung:
-{pdf_text if pdf_text else "[PDF nicht verfügbar - Problem manuell eingeben]"}
+            {pdf_text if pdf_text else "[PDF gefunden, aber der Text konnte nicht extrahiert werden - Problem manuell eingeben]"}
 
 ## Aufgabe:
 Erstelle eine vollständige Python-Lösung die:
 1. Input-Dateien aus Inputs/ liest
 2. Jede Eingabe gemäß Problembeschreibung verarbeitet  
 3. Output-Dateien nach Outputs/ schreibt
+4. Optimisierung ist wichtig (sei so schnell wie möglich), aber opfere möglichst wenig qualität)
 
 ## Input-Dateien:
 - Pfad: Inputs/
-- Format: level{self.level}_*.in
+- Format: in_*
 
 ## Output-Dateien:
-- Pfad: Outputs/  
-- Format: level{self.level}_*.out
+- Pfad: Outputs/
+- Format: out_*
 
 ## Template:
 ```python
@@ -166,18 +219,19 @@ def solve(input_data):
     return "result"
 
 def main():
-    input_folder = Path("Inputs")
-    output_folder = Path("Outputs")
+    base_dir = Path(__file__).resolve().parent
+    input_folder = base_dir / "Inputs"
+    output_folder = base_dir / "Outputs"
     output_folder.mkdir(exist_ok=True)
     
-    for input_file in sorted(input_folder.glob("level{self.level}_*.in")):
-        with open(input_file, 'r') as f:
+    for input_file in sorted(input_folder.glob("in_*")):
+        with open(input_file, 'r', encoding='utf-8') as f:
             data = f.read()
         
         result = solve(data)
         
-        output_file = output_folder / input_file.name.replace('.in', '.out')
-        with open(output_file, 'w') as f:
+        output_file = output_folder / input_file.name.replace('in_', 'out_', 1)
+        with open(output_file, 'w', encoding='utf-8') as f:
             f.write(str(result))
         print(f"Generiert: {{output_file.name}}")
 
@@ -193,7 +247,7 @@ Bitte erstelle eine vollständige Lösung und speichere sie als level{self.level
 """
         
         # Prompt-Datei speichern
-        prompt_file = f"level{self.level}_prompt.txt"
+        prompt_file = self.level_dir / f"level{self.level}_prompt.txt"
         with open(prompt_file, 'w', encoding='utf-8') as f:
             f.write(prompt)
         
@@ -204,16 +258,22 @@ Bitte erstelle eine vollständige Lösung und speichere sie als level{self.level
         """Dateien organisieren."""
         self.log("Organisiere Dateien...")
         
-        # .in Dateien nach Inputs/
-        in_files = list(Path("infos").glob("*.in"))
+        # Eingabedateien nach Inputs/
+        in_files = [
+            file_path for file_path in self.source_dir.rglob("in_*")
+            if file_path.is_file()
+        ]
         for in_file in in_files:
-            dest = Path("Inputs") / in_file.name
+            dest = self.input_dir / in_file.name
             shutil.move(str(in_file), str(dest))
         
-        # .out Dateien nach Outputs/ (falls vorhanden)
-        out_files = list(Path("infos").glob("*.out"))
+        # Referenzausgaben nach Outputs/ (falls vorhanden)
+        out_files = [
+            file_path for file_path in self.source_dir.rglob("out_*")
+            if file_path.is_file()
+        ]
         for out_file in out_files:
-            dest = Path("Outputs") / out_file.name
+            dest = self.output_dir / out_file.name
             shutil.move(str(out_file), str(dest))
         
         self.log(f"Dateien organisiert: {len(in_files)} .in, {len(out_files)} .out", "OK")
@@ -291,7 +351,7 @@ if __name__ == "__main__":
     main()
 '''
         
-        solution_file = f"level{self.level}.py"
+        solution_file = self.level_dir / f"level{self.level}.py"
         with open(solution_file, 'w', encoding='utf-8') as f:
             f.write(template)
         
@@ -300,7 +360,7 @@ if __name__ == "__main__":
     
     def run_solution(self) -> bool:
         """Lösung ausführen."""
-        solution_file = f"level{self.level}.py"
+        solution_file = self.level_dir / f"level{self.level}.py"
         
         if not Path(solution_file).exists():
             self.log(f"{solution_file} nicht gefunden!", "ERROR")
@@ -309,14 +369,17 @@ if __name__ == "__main__":
         self.log(f"Führe {solution_file} aus...")
         
         try:
-            result = subprocess.run([sys.executable, solution_file], 
-                                  capture_output=False)
+            result = subprocess.run(
+                [sys.executable, solution_file.name],
+                cwd=self.level_dir,
+                capture_output=False,
+            )
             
             if result.returncode == 0:
                 self.log("Lösung erfolgreich ausgeführt", "OK")
                 
                 # Output-Dateien zählen
-                out_files = list(Path("Outputs").glob("*.out"))
+                out_files = list(self.output_dir.glob("*.out"))
                 self.log(f"Generiert: {len(out_files)} Output-Dateien", "OK")
                 return True
             else:
@@ -331,10 +394,8 @@ if __name__ == "__main__":
         """Aufräumen."""
         self.log("Räume auf...")
         
-        # infos/ Ordner leeren
-        for file in Path("infos").glob("*"):
-            if file.is_file():
-                file.unlink()
+        if self.source_dir.exists():
+            shutil.rmtree(self.source_dir)
         
         self.log("Aufgeräumt", "OK")
     
@@ -343,7 +404,7 @@ if __name__ == "__main__":
         workflow = f"""# Level {self.level} - AI Workflow
 
 ## Schritt 1: Prompt kopieren
-Kopiere den Inhalt aus: `level{self.level}_prompt.txt`
+Kopiere den Inhalt aus: `levels/level-{self.level}/level{self.level}_prompt.txt`
 
 ## Schritt 2: AI verwenden
 Füge den Prompt ein in:
@@ -354,17 +415,17 @@ Füge den Prompt ein in:
 ## Schritt 3: Lösung generieren
 Bitte die AI:
 1. Vollständige Python-Lösung zu erstellen
-2. Als `level{self.level}.py` zu speichern
+2. Als `levels/level-{self.level}/level{self.level}.py` zu speichern
 3. Sicherstellen dass sie aus `Inputs/` liest und nach `Outputs/` schreibt
 
 ## Schritt 4: Testen
-Führe aus: `python level{self.level}.py`
+Führe die Lösung aus dem Level-Ordner aus: `python levels/level-{self.level}/level{self.level}.py`
 
 ## Schritt 5: Fertigstellen
-Führe aus: `python ccc_simple.py {self.level}` um weiterzumachen
+Führe aus dem Projektordner aus: `python ccc_simple.py {self.level}` um einen neuen Lauf zu starten
 """
         
-        workflow_file = f"level{self.level}_workflow.md"
+        workflow_file = self.level_dir / f"level{self.level}_workflow.md"
         with open(workflow_file, 'w', encoding='utf-8') as f:
             f.write(workflow)
         
@@ -377,6 +438,7 @@ Führe aus: `python ccc_simple.py {self.level}` um weiterzumachen
         
         # Schritt 1: Dateien verarbeiten
         try:
+            self.prepare_run()
             self.extract_zip()
             pdf_text = self.extract_pdf_text()
             self.create_ai_prompt(pdf_text)
@@ -390,14 +452,13 @@ Führe aus: `python ccc_simple.py {self.level}` um weiterzumachen
         
         # Schritt 3: Pause für manuelle Arbeit
         self.header(f"⏸️  PAUSE - Erstelle level{self.level}.py")
-        print(f"📋 AI-Prompt: level{self.level}_prompt.txt")
+        print(f"📋 AI-Prompt: {self.level_dir / f'level{self.level}_prompt.txt'}")
         print(f"📖 Workflow: {workflow_file}")
-        print(f"📁 Input-Dateien: Inputs/")
-        print(f"🎯 Erstelle: level{self.level}.py")
+        print(f"📁 Input-Dateien: {self.input_dir}/")
+        print(f"🎯 Erstelle: {self.level_dir / f'level{self.level}.py'}")
         print(f"\nDrücke ENTER wenn level{self.level}.py fertig ist...")
         input()
-        
-        # Schritt 4: Lösung ausführen
+
         if self.run_solution():
             self.cleanup()
             self.header(f"🎉 Level {self.level} erfolgreich abgeschlossen!")
@@ -411,6 +472,7 @@ Führe aus: `python ccc_simple.py {self.level}` um weiterzumachen
         
         # Schritt 1: Dateien verarbeiten
         try:
+            self.prepare_run()
             self.extract_zip()
             pdf_text = self.extract_pdf_text()
             prompt = self.create_ai_prompt(pdf_text)
@@ -419,20 +481,16 @@ Führe aus: `python ccc_simple.py {self.level}` um weiterzumachen
             self.log(f"Verarbeitung fehlgeschlagen: {e}", "ERROR")
             return 1
         
-        # Schritt 2: AI-Automatisierung versuchen
         self.log("Versuche AI-Automatisierung...", "AI")
         
         # Erstelle Anweisungsdatei für manuelle AI-Nutzung
-        ai_file = f"level{self.level}_ai_request.md"
+        ai_file = self.level_dir / f"level{self.level}_ai_request.md"
         with open(ai_file, 'w', encoding='utf-8') as f:
             f.write(f"""# AI Request für Level {self.level}
 
 Bitte generiere eine vollständige Python-Lösung für diese Coding Challenge.
 
 {prompt}
-
-## Anforderungen:
-- Speichere als `level{self.level}.py`
 - Stelle sicher dass es aus Inputs/ liest und nach Outputs/ schreibt
 - Füge Fehlerbehandlung hinzu
 """)
@@ -442,7 +500,7 @@ Bitte generiere eine vollständige Python-Lösung für diese Coding Challenge.
         print(f"1. Öffne: {ai_file}")
         print("2. Kopiere den kompletten Inhalt")
         print("3. Füge ihn in GitHub Copilot Chat ein")
-        print(f"4. Speichere die generierte Lösung als: level{self.level}.py")
+        print(f"4. Speichere die generierte Lösung als: {self.level_dir / f'level{self.level}.py'}")
         print("5. Drücke ENTER wenn die Lösung bereit ist...")
         input()
         
@@ -459,13 +517,14 @@ Bitte generiere eine vollständige Python-Lösung für diese Coding Challenge.
         self.header(f"📝 CCC Level {self.level} - Template-Modus")
         
         try:
+            self.prepare_run()
             self.extract_zip()
             self.extract_pdf_text()  # Für Kontext, auch wenn nicht verwendet
             self.organize_files()
             self.generate_template()
             
             self.header("Template erstellt!")
-            print(f"📝 Template: level{self.level}.py")
+            print(f"📝 Template: {self.level_dir / f'level{self.level}.py'}")
             print("⚠️  Implementiere die solve() Funktion")
             print(f"\nLösung testen? [j/N]: ", end="")
             

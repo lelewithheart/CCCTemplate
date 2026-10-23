@@ -9,11 +9,11 @@ import sys
 from pathlib import Path
 
 
-def install_pip_package(package):
+def install_pip_package(python_executable, package):
     """Installiert ein pip-Paket."""
     try:
         print(f"📦 Installiere {package}...")
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', package], 
+        result = subprocess.run([str(python_executable), '-m', 'pip', 'install', package], 
                               capture_output=True, text=True)
         if result.returncode == 0:
             print(f"✅ {package} installiert")
@@ -41,20 +41,34 @@ def setup():
     
     print("✅ Python Version OK")
     
-    # Ordner erstellen
+    # Basisordner erstellen; die Level-Unterordner legt der Runner an
     print("\n📁 Erstelle Ordner...")
-    for folder in ['Inputs', 'Outputs', 'infos']:
+    for folder in ['levels']:
         Path(folder).mkdir(exist_ok=True)
         print(f"✅ {folder}/")
     
-    # Abhängigkeiten installieren
+    # Abhängigkeiten in einer projektlokalen Umgebung installieren
     print("\n📦 Installiere Abhängigkeiten...")
-    install_pip_package('pdfplumber')
+    venv_dir = Path('.venv')
+    if not venv_dir.exists():
+        print(f"🐍 Erstelle {venv_dir}/...")
+        result = subprocess.run([sys.executable, '-m', 'venv', str(venv_dir)])
+        if result.returncode != 0:
+            print("❌ Virtuelle Umgebung konnte nicht erstellt werden")
+            return False
+
+    venv_python = venv_dir / 'bin' / 'python'
+    if not venv_python.exists():
+        print(f"❌ Python in {venv_dir}/ nicht gefunden")
+        return False
+
+    if not install_pip_package(venv_python, 'pdfplumber'):
+        return False
     
     print("\n🎉 Setup abgeschlossen!")
     print("\n📖 Verwendung:")
-    print("  python ccc_simple.py 5           # Interaktiv")
-    print("  python ccc_simple.py 5 --template # Template")
+    print("  .venv/bin/python ccc_simple.py 5           # Interaktiv")
+    print("  .venv/bin/python ccc_simple.py 5 --template # Template")
     
     return True
 

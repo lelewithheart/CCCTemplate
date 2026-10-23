@@ -3,9 +3,9 @@
 ## 🚀 **EMPFOHLEN: CCC Simple** (Neu, einfach, alles-in-einem)
 
 ```powershell
-python setup_simple.py                # Einmal ausführen
-python ccc_simple.py 5                # Level 5 interaktiv
-python ccc_simple.py 5 --auto         # Level 5 vollautomatisch
+python3 setup_simple.py                # Einmal ausführen
+.venv/bin/python ccc_simple.py 5       # Level 5 interaktiv
+.venv/bin/python ccc_simple.py 5 --auto # Level 5 vollautomatisch
 ```
 
 **Warum Simple?**
@@ -52,7 +52,7 @@ python run_level.py 5 --auto          # Optimierter Original
 ### Für 99% der Fälle:
 ```powershell
 # Verwende CCC Simple
-python ccc_simple.py 5
+.venv/bin/python ccc_simple.py 5
 ```
 
 ### Nur wenn du das System erweitern willst:
@@ -83,14 +83,32 @@ CCCTemplate/
     └── WORKFLOW_ENHANCED.md    # Erweiterte Workflows
 ```
 
+### Ordnerstruktur der Levels
+
+Jedes Level wird getrennt verwaltet:
+
+```
+levels/
+└── level-5/
+    ├── Inputs/       # Eingabedateien
+    ├── Outputs/      # erzeugte Ausgaben und Referenzausgaben
+    ├── source/       # PDF aus dem ZIP
+    ├── level5.py     # deine Lösung
+    ├── level5_prompt.txt
+    └── level5_workflow.md
+```
+
+Beim nächsten Lauf desselben Levels werden alte Inputs, Outputs, Prompt-,
+Workflow- und Quelldateien automatisch ersetzt. Die vorhandene Lösung bleibt erhalten.
+
 ---
 
 ## 🚀 Schnellstart
 
 **Neu hier? Fang mit Simple an:**
 
-1. **Setup** (einmalig): `python setup_simple.py`
-2. **Verwenden**: `python ccc_simple.py 5`
+1. **Setup** (einmalig): `python3 setup_simple.py`
+2. **Verwenden**: `.venv/bin/python ccc_simple.py 5`
 3. **Fertig!** 🎉
 
 **Das wars!** Keine komplexen Entscheidungen, keine Verwirrung.
